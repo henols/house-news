@@ -1,0 +1,14 @@
+serial:
+  port: /dev/ttyUSB0
+  baud-rate: 19200
+
+mqtt-broker:
+  url: tcp://aceone.se:1883
+  id: house-news
+  
+sensor:
+  location: mulbetet49  
+
+logging:
+  level:
+    se.aceone.powercounter: DEBUG
