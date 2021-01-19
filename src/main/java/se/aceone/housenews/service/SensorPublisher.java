@@ -80,7 +80,7 @@ public class SensorPublisher {
 		connection.open();
 		log.info("Open serial connection: " + connection.isOpen());
 
-		log.debug("Connecting client: " + client.getClientId() + " to MQTT server: " + client.getServerURI());
+		log.info("Connecting client: " + client.getClientId() + " to MQTT server: " + client.getServerURI());
 		client.connect(options);
 		log.info("Connected to MQTT server: " + client.isConnected());
 	}
