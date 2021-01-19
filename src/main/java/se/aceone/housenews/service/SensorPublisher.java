@@ -80,11 +80,9 @@ public class SensorPublisher {
 		connection.open();
 		log.info("Open serial connection: " + connection.isOpen());
 
-		log.debug("Connecting to MQTT server : " + client.getServerURI());
-
+		log.debug("Connecting client: " + client.getClientId() + " to MQTT server: " + client.getServerURI());
 		client.connect(options);
-
-		log.info("Connected to MQTT server : " + client.isConnected());
+		log.info("Connected to MQTT server: " + client.isConnected());
 	}
 
 	@Scheduled(initialDelay = 2000, fixedRate = TEMPERATURE_PING_TIME * 1000)

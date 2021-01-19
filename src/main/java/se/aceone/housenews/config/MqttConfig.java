@@ -1,5 +1,7 @@
 package se.aceone.housenews.config;
 
+import java.util.Random;
+
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -15,10 +17,8 @@ public class MqttConfig {
 	@Bean
 	public IMqttClient mqttClient(@Value("${mqtt-broker.url}") String url, @Value("${mqtt-broker.id}") String id)
 			throws MqttException {
-//		java.io.tmpdir
 		MqttDefaultFilePersistence dataStore = new MqttDefaultFilePersistence();
-
-		return new MqttClient(url, id, dataStore);
+		return new MqttClient(url, id + "-" + generatingRandomAlphanumericString(), dataStore);
 	}
 
 	@Bean
@@ -31,4 +31,14 @@ public class MqttConfig {
 		return options;
 	}
 
+	public String generatingRandomAlphanumericString() {
+		int leftLimit = 48; // numeral '0'
+		int rightLimit = 122; // letter 'z'
+		int targetStringLength = 10;
+		Random random = new Random();
+
+		return random.ints(leftLimit, rightLimit + 1).filter(i -> (i <= 57 || i >= 65) && (i <= 90 || i >= 97))
+				.limit(targetStringLength)
+				.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
+	}
 }

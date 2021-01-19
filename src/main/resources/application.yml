@@ -11,4 +11,4 @@ sensor:
 
 logging:
   level:
-    se.aceone.housenews: DEBUG
+    se.aceone.housenews: INFO
