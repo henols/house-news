@@ -3,7 +3,7 @@ serial:
   baud-rate: 19200
 
 mqtt-broker:
-  url: tcp://aceone.se:1883
+  url: tcp://domain.name:1883
   id: house-news
   
 sensor:
@@ -11,4 +11,4 @@ sensor:
 
 logging:
   level:
-    se.aceone.powercounter: DEBUG
+    se.aceone.housenews: DEBUG
