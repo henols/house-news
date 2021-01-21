@@ -2,10 +2,17 @@ package se.aceone.housenews.connection;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fazecast.jSerialComm.SerialPort;
 
+import se.aceone.housenews.service.SensorPublisher;
+
 public class JSerialCommConnection implements Connection {
+	private static final Logger log = LoggerFactory.getLogger(JSerialCommConnection.class);
 
 	private final String comPortName;
 	private final int baudRate;
@@ -15,6 +22,7 @@ public class JSerialCommConnection implements Connection {
 	public JSerialCommConnection(String comPortName, int baudRate) {
 		this.comPortName = comPortName;
 		this.baudRate = baudRate;
+		Arrays.stream(SerialPort.getCommPorts()).forEach(port -> log.debug("Found port: {}", port.getSystemPortName()));
 	}
 
 	@Override
