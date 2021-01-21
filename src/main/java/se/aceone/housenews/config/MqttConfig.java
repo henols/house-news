@@ -15,9 +15,9 @@ import org.springframework.context.annotation.Configuration;
 public class MqttConfig {
 
 	@Bean
-	public IMqttClient mqttClient(@Value("${mqtt-broker.url}") String url, @Value("${mqtt-broker.id}") String id)
-			throws MqttException {
-		MqttDefaultFilePersistence dataStore = new MqttDefaultFilePersistence();
+	public IMqttClient mqttClient(@Value("${mqtt-broker.url}") String url, @Value("${mqtt-broker.id}") String id,
+			@Value("${mqtt-broker.persist-dir}") String persistDir) throws MqttException {
+		MqttDefaultFilePersistence dataStore = new MqttDefaultFilePersistence(persistDir);
 		return new MqttClient(url, id + "-" + generatingRandomAlphanumericString(), dataStore);
 	}
 

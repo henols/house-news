@@ -5,6 +5,7 @@ serial:
 mqtt-broker:
   url: tcp://domain.name:1883
   id: house-news
+  persist-dir: ${java.io.tmpdir}
   
 sensor:
   location: mulbetet49  
@@ -12,3 +13,4 @@ sensor:
 logging:
   level:
     se.aceone.housenews: INFO
+    
