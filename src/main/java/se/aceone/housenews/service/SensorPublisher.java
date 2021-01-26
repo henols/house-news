@@ -120,9 +120,9 @@ public class SensorPublisher {
 			try {
 				if (registerPower) {
 					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
-							POWER_TOPIC, "power");
+							POWER_TOPIC, "power", "W");
 					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
-							ENERGY_TOPIC, "energy");
+							ENERGY_TOPIC, "energy", "kWh");
 					registerPower = false;
 				}
 
@@ -158,7 +158,7 @@ public class SensorPublisher {
 
 		if (registerTemp) {
 			buildDiscovery(Arrays.stream(result.split(",")).map(s -> s.substring(0, s.indexOf(':')))
-					.collect(Collectors.toList()), "%s", TEMPERATURE_TOPIC, "temperature");
+					.collect(Collectors.toList()), "%s", TEMPERATURE_TOPIC, "temperature", "°C");
 			registerTemp = false;
 		}
 
@@ -366,11 +366,13 @@ public class SensorPublisher {
 		return result;
 	}
 
-	private void buildDiscovery(List<String> sensors, String nameTemplate, String topicTemplate, String type)
-			throws MqttPersistenceException, MqttException {
+	private void buildDiscovery(List<String> sensors, String nameTemplate, String topicTemplate, String type,
+			String unit) throws MqttPersistenceException, MqttException {
 		String payload = "[" + sensors.stream().map(i -> i + "")
-				.map(s -> "{ \"name\": \"" + String.format(nameTemplate, s) + "\", \"topic\": \""
-						+ String.format(topicTemplate, location, s) + "\", \"type\": \"" + type + "\"}")
+				.map(s -> "{ \"name\": \"" + String.format(nameTemplate, s) + "\"" //
+						+ ", \"topic\": \"" + String.format(topicTemplate, location, s) + "\"" //
+						+ ", \"type\": \"" + type + "\"" //
+						+ ", \"unit\": \"" + unit + "\"}")
 				.collect(Collectors.joining(",")) + "]";
 		log.debug("Discovery: " + payload);
 
