@@ -46,7 +46,7 @@ public class SensorPublisher {
 
 	private static final boolean CLEAR_COUNT = true;
 
-	private static final long POWER_PING_TIME = 10;
+	private static final long POWER_PING_TIME = 60;
 	private static final long TEMPERATURE_PING_TIME = 60;
 
 	private static final String ENERGY = "kwh%s";
