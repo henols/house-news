@@ -369,7 +369,7 @@ public class SensorPublisher {
 	private void buildDiscovery(List<String> sensors, String nameTemplate, String topicTemplate, String type,
 			String unit) throws MqttPersistenceException, MqttException {
 		String payload = "[" + sensors.stream().map(i -> i + "")
-				.map(s -> "{ \"name\": \"" + String.format(nameTemplate, s) + "\"" //
+				.map(s -> "{ \"ids\": \"" + String.format(nameTemplate, s) + "\"" //
 						+ ", \"topic\": \"" + String.format(topicTemplate, location, s) + "\"" //
 						+ ", \"type\": \"" + type + "\"" //
 						+ ", \"unit\": \"" + unit + "\"}")
