@@ -158,7 +158,7 @@ public class SensorPublisher {
 
 		if (registerTemp) {
 			buildDiscovery(Arrays.stream(result.split(",")).map(s -> s.substring(0, s.indexOf(':')))
-					.collect(Collectors.toList()), POWER, POWER_TOPIC, "temperature");
+					.collect(Collectors.toList()), "%s", TEMPERATURE_TOPIC, "temperature");
 			registerTemp = false;
 		}
 
@@ -369,7 +369,7 @@ public class SensorPublisher {
 	private void buildDiscovery(List<String> sensors, String nameTemplate, String topicTemplate, String type)
 			throws MqttPersistenceException, MqttException {
 		String payload = "[" + sensors.stream().map(i -> i + "")
-				.map(s -> "{ \"name\": \'" + String.format(nameTemplate, s) + "\", \"topic\": \""
+				.map(s -> "{ \"name\": \"" + String.format(nameTemplate, s) + "\", \"topic\": \""
 						+ String.format(topicTemplate, location, s) + "\", \"type\": \"" + type + "\"}")
 				.collect(Collectors.joining(",")) + "]";
 		log.debug("Discovery: " + payload);
