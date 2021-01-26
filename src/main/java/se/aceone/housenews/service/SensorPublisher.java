@@ -1,8 +1,11 @@
 package se.aceone.housenews.service;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
+import java.util.stream.Collectors;
 
 import javax.annotation.PostConstruct;
 
@@ -29,6 +32,7 @@ public class SensorPublisher {
 
 	private static final byte METER_1 = 0;
 	private static final byte METER_2 = 1;
+	private static final int[] METERS = { METER_1, METER_2 };
 
 	private static final byte[] READ_METER_1 = { '4', '0' };
 	private static final byte[] READ_METER_2 = { '4', '1' };
@@ -45,11 +49,11 @@ public class SensorPublisher {
 	private static final long POWER_PING_TIME = 10;
 	private static final long TEMPERATURE_PING_TIME = 60;
 
-	private static final String KWH = "kwh%s";
+	private static final String ENERGY = "kwh%s";
 	private static final String POWER = "power%s";
 
 	private final static String POWER_TOPIC = "%s/powermeter/" + POWER;
-	private final static String KWH_TOPIC = "%s/powermeter/" + KWH;
+	private final static String ENERGY_TOPIC = "%s/powermeter/" + ENERGY;
 	private final static String TEMPERATURE_TOPIC = "%s/temperature/%s";
 
 	private static final Logger log = LoggerFactory.getLogger(SensorPublisher.class);
@@ -61,6 +65,9 @@ public class SensorPublisher {
 	private final Connection connection;
 	private final MqttConnectOptions options;
 	private final String location;
+
+	private boolean registerTemp = true;
+	private boolean registerPower = true;
 
 	@Autowired
 	public SensorPublisher(@Value("${sensor.location}") String location, IMqttClient client, Connection connection,
@@ -111,6 +118,14 @@ public class SensorPublisher {
 				connection.open();
 			}
 			try {
+				if (registerPower) {
+					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
+							POWER_TOPIC, "power");
+					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
+							ENERGY_TOPIC, "energy");
+					registerPower = false;
+				}
+
 				if (!publishPower()) {
 					connection.close();
 				}
@@ -141,8 +156,11 @@ public class SensorPublisher {
 			return false;
 		}
 
-		// Split result
-		// power:22.44,temperature:15.50
+		if (registerTemp) {
+			buildDiscovery(Arrays.stream(result.split(",")).map(s -> s.substring(0, s.indexOf(':')))
+					.collect(Collectors.toList()), POWER, POWER_TOPIC, "temperature");
+			registerTemp = false;
+		}
 
 		MqttMessage message = new MqttMessage();
 		message.setQos(1);
@@ -205,8 +223,8 @@ public class SensorPublisher {
 			message.setQos(1);
 
 			message.setPayload(
-					buildJson(nKWh, timestamp, String.format(KWH, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
-			MqttTopic topic = client.getTopic(String.format(KWH_TOPIC, location, meter));
+					buildJson(nKWh, timestamp, String.format(ENERGY, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
+			MqttTopic topic = client.getTopic(String.format(ENERGY_TOPIC, location, meter));
 			log.debug("Publishing to broker: " + topic + " : " + message);
 			topic.publish(message);
 
@@ -271,15 +289,13 @@ public class SensorPublisher {
 			MqttMessage message = new MqttMessage();
 			message.setQos(1);
 
-			MqttTopic topic = client.getTopic(String.format(KWH_TOPIC + "/dailyconsumption", location, meter));
+			MqttTopic topic = client.getTopic(String.format(ENERGY_TOPIC + "/dailyconsumption", location, meter));
 
 			message.setPayload(
-					buildJson(kWh, timestamp, String.format(KWH, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
+					buildJson(kWh, timestamp, String.format(ENERGY, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
 
 			try {
 				topic.publish(message);
-			} catch (MqttPersistenceException e) {
-				log.error("Failed to persist: " + message, e);
 			} catch (MqttException e) {
 				log.error("Failed to publish: " + message, e);
 			}
@@ -349,4 +365,17 @@ public class SensorPublisher {
 		log.debug("Response: " + result);
 		return result;
 	}
+
+	private void buildDiscovery(List<String> sensors, String nameTemplate, String topicTemplate, String type)
+			throws MqttPersistenceException, MqttException {
+		String payload = "[" + sensors.stream().map(i -> i + "")
+				.map(s -> "{ \"name\": \'" + String.format(nameTemplate, s) + "\", \"topic\": \""
+						+ String.format(topicTemplate, location, s) + "\", \"type\": \"" + type + "\"}")
+				.collect(Collectors.joining(",")) + "]";
+		log.debug("Discovery: " + payload);
+
+		MqttTopic topic = client.getTopic("discovery/" + type);
+		topic.publish(payload.getBytes(), 1, true);
+	}
+
 }
