@@ -12,8 +12,8 @@ import javax.annotation.PostConstruct;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.MqttSecurityException;
 import org.eclipse.paho.client.mqttv3.MqttTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +46,8 @@ public class SensorPublisher {
 
 	private static final boolean CLEAR_COUNT = true;
 
-	private static final long POWER_PING_TIME = 60;
+	private static final long POWER_PING_TIME = 20;
+	private static final long ENERGY_PING_TIME = 300;
 	private static final long TEMPERATURE_PING_TIME = 60;
 
 	private static final String ENERGY = "kwh%s";
@@ -58,7 +59,9 @@ public class SensorPublisher {
 
 	private static final Logger log = LoggerFactory.getLogger(SensorPublisher.class);
 
-	private double oldKWh[] = { Double.MIN_VALUE, Double.MIN_VALUE };
+	private int oldKWh[] = { Integer.MIN_VALUE, Integer.MIN_VALUE };
+
+	private int powerPublishCount[] = { 0, 0 };
 
 	private Object lock = new Object();
 	private final IMqttClient client;
@@ -83,9 +86,9 @@ public class SensorPublisher {
 
 	@PostConstruct
 	public void init() throws Exception {
-		log.info("Opening serial connection: " + connection.getName());
+		log.info("Connecting to serial port: " + connection.getName());
 		connection.open();
-		log.info("Open serial connection: " + connection.isOpen());
+		log.info("Serial port is connected: " + connection.isOpen());
 
 		log.info("Connecting client: " + client.getClientId() + " to MQTT server: " + client.getServerURI());
 		client.connect(options);
@@ -96,17 +99,8 @@ public class SensorPublisher {
 	private void readTemperature() throws Exception {
 		log.debug("readTemperature");
 		synchronized (lock) {
-			if (!connection.isOpen()) {
-				connection.open();
-			}
-
-			try {
-				if (!publishTemperature()) {
-					connection.close();
-				}
-			} catch (IOException e) {
-				log.error("Error reading temperature: {}", e.getMessage());
-			}
+			checkConnections();
+			publishTemperature();
 		}
 	}
 
@@ -114,38 +108,28 @@ public class SensorPublisher {
 	private void readPowerMeter() throws Exception {
 		log.debug("readPowerMeter");
 		synchronized (lock) {
-			if (!connection.isOpen()) {
-				connection.open();
+			checkConnections();
+			if (registerPower) {
+				buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
+						POWER_TOPIC, "power", "W");
+				buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
+						ENERGY_TOPIC, "energy", "kWh");
+				registerPower = false;
 			}
-			try {
-				if (registerPower) {
-					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
-							POWER_TOPIC, "power", "W");
-					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
-							ENERGY_TOPIC, "energy", "kWh");
-					registerPower = false;
-				}
-
-				if (!publishPower()) {
-					connection.close();
-				}
-			} catch (IOException e) {
-				log.error("Error reading power: {}", e.getMessage());
-			}
+			long timestamp = System.currentTimeMillis();
+			publishPower(METER_1, timestamp);
+			publishPower(METER_2, timestamp);
 		}
 	}
 
 	@Scheduled(cron = "0 0 0 * * *")
-	private void readDailyConsumtion() {
+	private void readDailyConsumtion() throws Exception {
 		log.debug("readDailyConsumtion");
 		synchronized (lock) {
-			if (!publishDailyConsumtion()) {
-				connection.close();
-				try {
-					connection.open();
-				} catch (Exception e) {
-				}
-			}
+			checkConnections();
+			long timestamp = System.currentTimeMillis();
+			publishDailyConsumtion(METER_1, timestamp);
+			publishDailyConsumtion(METER_2, timestamp);
 		}
 	}
 
@@ -162,9 +146,6 @@ public class SensorPublisher {
 			registerTemp = false;
 		}
 
-		MqttMessage message = new MqttMessage();
-		message.setQos(1);
-		message.setRetained(true);
 		long timestamp = System.currentTimeMillis();
 
 		String[] strings = result.split(",");
@@ -174,20 +155,18 @@ public class SensorPublisher {
 				continue;
 			}
 			MqttTopic topic = client.getTopic(String.format(TEMPERATURE_TOPIC, location, string.substring(0, indexOf)));
-			message.setPayload(
-					buildJson(string.substring(indexOf + 1), timestamp, string.substring(0, indexOf), null).getBytes());
-			log.debug("Publishing to broker: " + topic + " : " + message);
-			topic.publish(message);
+			String payload = buildJson(string.substring(indexOf + 1), timestamp, string.substring(0, indexOf), null);
+
+			log.debug("Publishing to broker: " + topic + " : " + payload);
+			topic.publish(payload.getBytes(), 1, true);
 		}
 		return true;
 	}
 
-	private boolean publishPower() throws IOException, MqttException {
-		long timestamp = System.currentTimeMillis();
-		return publishPower(METER_1, timestamp) && publishPower(METER_2, timestamp);
-	}
-
 	private boolean publishPower(byte meter, long timestamp) throws IOException, MqttException {
+
+		powerPublishCount[meter]++;
+
 		String result = readProtocol(READ_METER[meter]);
 		if (result == null) {
 			return false;
@@ -201,46 +180,43 @@ public class SensorPublisher {
 			return false;
 		}
 
-		String pulses = r[1];
 		String power = r[2];
-		// logger.debug("pulses:"+pulses+" power:"+power)
-		double kWh;
+		if (Integer.parseInt(power) < 0) {
+			log.error("We seem to have a negative power:" + power);
+		} else {
+			String payload = buildJson(power, timestamp, String.format(POWER, meter), meter == 0 ? MAIN : HEATPUMP);
+			MqttTopic topic = client.getTopic(String.format(POWER_TOPIC, location, meter));
+			log.debug("Publishing to broker: " + topic + " : " + payload);
+			topic.publish(payload.getBytes(), 1, true);
+		}
+
+		String pulses = r[1];
+		int energy;
 		try {
-			if (Double.parseDouble(pulses) < 0 || Double.parseDouble(power) < 0) {
-				log.error("We seem to have a negative value: pulses:" + pulses + " power:" + power);
-				return false;
+			energy = Integer.parseInt(pulses);
+			if (oldKWh[meter] < 0) {
+				oldKWh[meter] = energy;
 			}
-			kWh = Double.parseDouble(pulses);
 		} catch (NumberFormatException e) {
-			log.error("We seem to have a negative value: pulses:" + pulses + " power:" + power, e);
+			log.error("Failed to read energy pulses for meter: " + meter, e);
 			return false;
 		}
+		if (powerPublishCount[meter] % (ENERGY_PING_TIME / POWER_PING_TIME) == 0) {
+			if (energy < 0) {
+				log.error("We seem to have a negative pulses:" + pulses + " power:" + power);
+				return false;
+			}
 
-		if (Double.MIN_VALUE != oldKWh[meter]) {
-			double nKWh = kWh - oldKWh[meter];
-
-			MqttMessage message = new MqttMessage();
-			message.setQos(1);
-
-			message.setPayload(
-					buildJson(nKWh, timestamp, String.format(ENERGY, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
+			String energyNow = String.valueOf(energy - oldKWh[meter]);
+			String payload = buildJson(energyNow, timestamp, String.format(ENERGY, meter),
+					meter == 0 ? MAIN : HEATPUMP);
 			MqttTopic topic = client.getTopic(String.format(ENERGY_TOPIC, location, meter));
-			log.debug("Publishing to broker: " + topic + " : " + message);
-			topic.publish(message);
+			log.debug("Publishing to broker: " + topic + " : " + payload);
+			topic.publish(payload.getBytes(), 1, true);
 
-			message.setPayload(
-					buildJson(power, timestamp, String.format(POWER, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
-			topic = client.getTopic(String.format(POWER_TOPIC, location, meter));
-			log.debug("Publishing to broker: " + topic + " : " + message);
-			topic.publish(message);
+			oldKWh[meter] = energy;
 		}
-		oldKWh[meter] = kWh;
-		// logger.debug("ping : " + sb.toString().trim());
 		return true;
-	}
-
-	private String buildJson(double value, long timestamp, String name, String alias) {
-		return buildJson(String.valueOf(value), timestamp, name, alias);
 	}
 
 	private String buildJson(String value, long timestamp, String name, String alias) {
@@ -264,52 +240,37 @@ public class SensorPublisher {
 		return sb.toString();
 	}
 
-	private boolean publishDailyConsumtion() {
-		log.debug("Read and publish daily consumtion");
-		long timestamp = System.currentTimeMillis();
-		return publishDailyConsumtion(METER_1, timestamp) && publishDailyConsumtion(METER_2, timestamp);
-	}
-
-	private boolean publishDailyConsumtion(byte meter, long timestamp) {
+	private boolean publishDailyConsumtion(byte meter, long timestamp) throws Exception {
 		log.debug("Read power counter.");
-		try {
-			String result = readProtocol(READ_METER[meter]);
-			if (result == null) {
-				return false;
-			}
-			String[] r = splitPowerResult(result.toString());
-			@SuppressWarnings("unused")
-			String counter = r[0];
-			String pulses = r[1];
-			@SuppressWarnings("unused")
-			String power = r[2];
-			double kWh = toKWh(pulses);
-			// oldWh = 0;
-			oldKWh[meter] = 0;
-			MqttMessage message = new MqttMessage();
-			message.setQos(1);
-
-			MqttTopic topic = client.getTopic(String.format(ENERGY_TOPIC + "/dailyconsumption", location, meter));
-
-			message.setPayload(
-					buildJson(kWh, timestamp, String.format(ENERGY, meter), meter == 0 ? MAIN : HEATPUMP).getBytes());
-
-			try {
-				topic.publish(message);
-			} catch (MqttException e) {
-				log.error("Failed to publish: " + message, e);
-			}
-			if (CLEAR_COUNT) {
-				connection.getOutputStream().write(CONFIRM_METER[meter]);
-				for (int i = 0; i < pulses.length(); i++) {
-					byte charAt = (byte) pulses.charAt(i);
-					connection.getOutputStream().write(charAt);
-				}
-				connection.getOutputStream().write('\n');
-			}
-		} catch (IOException e) {
-			log.error("Failed to tweet", e);
+		String result = readProtocol(READ_METER[meter]);
+		if (result == null) {
 			return false;
+		}
+		String[] r = splitPowerResult(result.toString());
+		@SuppressWarnings("unused")
+		String counter = r[0];
+		String energy = r[1];
+		@SuppressWarnings("unused")
+		String power = r[2];
+		// oldWh = 0;
+		oldKWh[meter] = 0;
+
+		MqttTopic topic = client.getTopic(String.format(ENERGY_TOPIC + "/dailyconsumption", location, meter));
+
+		String payload = buildJson(energy, timestamp, String.format(ENERGY, meter), meter == 0 ? MAIN : HEATPUMP);
+
+		try {
+			topic.publish(payload.getBytes(), 1, true);
+		} catch (MqttException e) {
+			log.error("Failed to publish: " + payload, e);
+		}
+		if (CLEAR_COUNT) {
+			connection.getOutputStream().write(CONFIRM_METER[meter]);
+			for (int i = 0; i < energy.length(); i++) {
+				byte charAt = (byte) energy.charAt(i);
+				connection.getOutputStream().write(charAt);
+			}
+			connection.getOutputStream().write('\n');
 		}
 		return true;
 
@@ -324,10 +285,6 @@ public class SensorPublisher {
 		tmp = st.nextToken();
 		r[2] = tmp.substring(tmp.indexOf(":") + 1).trim();
 		return r;
-	}
-
-	private static double toKWh(String power) {
-		return Double.parseDouble(power);
 	}
 
 	private String readProtocol(byte[] protocol) throws IOException {
@@ -378,6 +335,19 @@ public class SensorPublisher {
 
 		MqttTopic topic = client.getTopic("discovery/" + type);
 		topic.publish(payload.getBytes(), 1, true);
+	}
+
+	private void checkConnections() throws Exception, MqttSecurityException, MqttException {
+		if (!connection.isOpen()) {
+			log.info("Reconnecting serial port: " + connection.getName());
+			connection.open();
+			log.info("Serial port is connected: " + connection.isOpen());
+		}
+		if (!client.isConnected()) {
+			log.info("Reconnecting client: " + client.getClientId() + " to MQTT server: " + client.getServerURI());
+			client.connect(options);
+			log.info("Connected to MQTT server: " + client.isConnected());
+		}
 	}
 
 }
