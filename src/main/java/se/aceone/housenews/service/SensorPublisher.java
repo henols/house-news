@@ -84,7 +84,7 @@ public class SensorPublisher {
 
 	}
 
-	@PostConstruct
+//	@PostConstruct
 	public void init() throws Exception {
 		log.info("Connecting to serial port: " + connection.getName());
 		connection.open();
@@ -104,7 +104,7 @@ public class SensorPublisher {
 		}
 	}
 
-	@Scheduled(initialDelay = 2400, fixedRate = POWER_PING_TIME * 1000)
+	@Scheduled(initialDelay = 5000, fixedRate = POWER_PING_TIME * 1000)
 	private void readPowerMeter() throws Exception {
 		log.debug("readPowerMeter");
 		synchronized (lock) {
