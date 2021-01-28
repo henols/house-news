@@ -193,7 +193,7 @@ public class SensorPublisher {
 		String pulses = r[1];
 		int energy;
 		try {
-			energy = Integer.parseInt(pulses);
+			energy = (int) Double.parseDouble(pulses);
 			if (oldKWh[meter] < 0) {
 				oldKWh[meter] = energy;
 			}
@@ -203,7 +203,7 @@ public class SensorPublisher {
 		}
 		if (powerPublishCount[meter] % (ENERGY_PING_TIME / POWER_PING_TIME) == 0) {
 			if (energy < 0) {
-				log.error("We seem to have a negative pulses:" + pulses + " power:" + power);
+				log.error("We seem to have a negative pulses:" + energy);
 				return false;
 			}
 
