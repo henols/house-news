@@ -290,32 +290,38 @@ public class SensorPublisher {
 	private String readProtocol(byte[] protocol) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		log.debug("Read protocol:" + new String(protocol));
-		connection.getOutputStream().write(protocol);
-		connection.getOutputStream().flush();
-		char c;
-		while (true) {
-			int sleeps = 0;
-			while (connection.getInputStream().available() <= 0) {
-				sleeps++;
-				if (sleeps > 20) {
-					log.error("Slept to long.");
+		try {
+			connection.getOutputStream().write(protocol);
+			connection.getOutputStream().flush();
+			char c;
+			while (true) {
+				int sleeps = 0;
+				while (connection.getInputStream().available() <= 0) {
+					sleeps++;
+					if (sleeps > 20) {
+						log.error("Slept to long.");
+						return null;
+					}
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+					}
+				}
+				if ((c = (char) connection.getInputStream().read()) == '\n') {
+					break;
+				}
+				sb.append(c);
+				if (sb.length() > 135) {
+					String message = "To mutch to read... '" + sb + "'";
+
+					log.error(message);
 					return null;
 				}
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-				}
 			}
-			if ((c = (char) connection.getInputStream().read()) == '\n') {
-				break;
-			}
-			sb.append(c);
-			if (sb.length() > 135) {
-				String message = "To mutch to read... '" + sb + "'";
-
-				log.error(message);
-				return null;
-			}
+		} catch (IOException e) {
+			log.warn("Failed to read from serial connection: " + e.getMessage());
+			connection.close();
+			throw e;
 		}
 
 		String result = sb.toString().trim();
