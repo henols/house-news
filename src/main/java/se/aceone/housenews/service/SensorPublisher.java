@@ -99,8 +99,9 @@ public class SensorPublisher {
 	private void readTemperature() throws Exception {
 		log.debug("readTemperature");
 		synchronized (lock) {
-			checkConnections();
-			publishTemperature();
+			if (checkConnections()) {
+				publishTemperature();
+			}
 		}
 	}
 
@@ -108,17 +109,18 @@ public class SensorPublisher {
 	private void readPowerMeter() throws Exception {
 		log.debug("readPowerMeter");
 		synchronized (lock) {
-			checkConnections();
-			if (registerPower) {
-				buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
-						POWER_TOPIC, "power", "W");
-				buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
-						ENERGY_TOPIC, "energy", "kWh");
-				registerPower = false;
+			if (checkConnections()) {
+				if (registerPower) {
+					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), POWER,
+							POWER_TOPIC, "power", "W");
+					buildDiscovery(Arrays.stream(METERS).mapToObj(String::valueOf).collect(Collectors.toList()), ENERGY,
+							ENERGY_TOPIC, "energy", "kWh");
+					registerPower = false;
+				}
+				long timestamp = System.currentTimeMillis();
+				publishPower(METER_1, timestamp);
+				publishPower(METER_2, timestamp);
 			}
-			long timestamp = System.currentTimeMillis();
-			publishPower(METER_1, timestamp);
-			publishPower(METER_2, timestamp);
 		}
 	}
 
@@ -126,10 +128,11 @@ public class SensorPublisher {
 	private void readDailyConsumtion() throws Exception {
 		log.debug("readDailyConsumtion");
 		synchronized (lock) {
-			checkConnections();
-			long timestamp = System.currentTimeMillis();
-			publishDailyConsumtion(METER_1, timestamp);
-			publishDailyConsumtion(METER_2, timestamp);
+			if (checkConnections()) {
+				long timestamp = System.currentTimeMillis();
+				publishDailyConsumtion(METER_1, timestamp);
+				publishDailyConsumtion(METER_2, timestamp);
+			}
 		}
 	}
 
@@ -343,7 +346,7 @@ public class SensorPublisher {
 		topic.publish(payload.getBytes(), 1, true);
 	}
 
-	private void checkConnections() throws Exception, MqttSecurityException, MqttException {
+	private boolean checkConnections() throws Exception, MqttSecurityException, MqttException {
 		if (!connection.isOpen()) {
 			log.info("Reconnecting serial port: " + connection.getName());
 			connection.open();
@@ -354,6 +357,7 @@ public class SensorPublisher {
 			client.connect(options);
 			log.info("Connected to MQTT server: " + client.isConnected());
 		}
+		return connection.isOpen() && client.isConnected();
 	}
 
 }
