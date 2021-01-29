@@ -28,9 +28,14 @@ public class JSerialCommConnection implements Connection {
 	@Override
 	public void open() throws Exception {
 		serialPort = SerialPort.getCommPort(comPortName);
-		serialPort.setBaudRate(baudRate);
-		serialPort.openPort();
-		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+		log.debug("Serial port: " + serialPort);
+		
+		boolean baudRateOk = serialPort.setBaudRate(baudRate);
+		log.debug("Serial baud rate: " +baudRate + " set: "+ baudRateOk);
+		boolean timeouts = serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+		log.debug("Serial timeout read semi blocking: " + timeouts);
+		boolean openPort = serialPort.openPort();
+		log.debug("Serial port open: " + openPort);
 	}
 
 	@Override
