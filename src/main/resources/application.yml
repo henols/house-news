@@ -3,7 +3,7 @@ serial:
   baud-rate: 19200
 
 mqtt-broker:
-  url: tcp://domain.name:1883
+  url: tcp://${domain.name}:1883
   id: house-news
   persist-dir: ${java.io.tmpdir}
   
