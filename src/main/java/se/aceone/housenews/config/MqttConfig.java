@@ -2,26 +2,28 @@ package se.aceone.housenews.config;
 
 import java.util.Random;
 
+import javax.enterprise.inject.Produces;
+import javax.inject.Singleton;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
-@Configuration
+@Singleton
 public class MqttConfig {
 
-	@Bean
-	public IMqttClient mqttClient(@Value("${mqtt-broker.url}") String url, @Value("${mqtt-broker.id}") String id,
-			@Value("${mqtt-broker.persist-dir}") String persistDir) throws MqttException {
+	@Produces
+	public IMqttClient mqttClient(@ConfigProperty(name = "mqtt-broker.url") String url,
+			@ConfigProperty(name = "mqtt-broker.id") String id,
+			@ConfigProperty(name = "mqtt-broker.persist-dir") String persistDir) throws MqttException {
 		MqttDefaultFilePersistence dataStore = new MqttDefaultFilePersistence(persistDir);
 		return new MqttClient(url, id + "-" + generatingRandomAlphanumericString(), dataStore);
 	}
 
-	@Bean
+	@Produces
 	public MqttConnectOptions mqttConnectOptions() {
 		MqttConnectOptions options = new MqttConnectOptions();
 		options.setAutomaticReconnect(true);

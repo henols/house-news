@@ -1,15 +1,13 @@
 package se.aceone.housenews;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
+import io.quarkus.runtime.Quarkus;
+import io.quarkus.runtime.annotations.QuarkusMain;
 
-@SpringBootApplication
-@EnableScheduling
+@QuarkusMain
 public class PowerCoutnerApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(PowerCoutnerApplication.class, args);
+		Quarkus.run(args);
 	}
 
 }

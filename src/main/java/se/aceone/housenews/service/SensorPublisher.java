@@ -5,10 +5,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import javax.annotation.PostConstruct;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.paho.client.mqttv3.IMqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -17,14 +20,11 @@ import org.eclipse.paho.client.mqttv3.MqttSecurityException;
 import org.eclipse.paho.client.mqttv3.MqttTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
 
+import io.quarkus.scheduler.Scheduled;
 import se.aceone.housenews.connection.Connection;
 
-@Service
+@Singleton
 public class SensorPublisher {
 
 	private static final String MAIN = "Main";
@@ -72,8 +72,8 @@ public class SensorPublisher {
 	private boolean registerTemp = true;
 	private boolean registerPower = true;
 
-	@Autowired
-	public SensorPublisher(@Value("${sensor.location}") String location, IMqttClient client, Connection connection,
+	@Inject
+	public SensorPublisher(@ConfigProperty(name = "sensor.location") String location, IMqttClient client, Connection connection,
 			MqttConnectOptions options) throws Exception {
 		this.location = location;
 		this.client = client;
@@ -95,8 +95,8 @@ public class SensorPublisher {
 		log.info("Connected to MQTT server: " + client.isConnected());
 	}
 
-	@Scheduled(initialDelay = 2000, fixedRate = TEMPERATURE_PING_TIME * 1000)
-	private void readTemperature() throws Exception {
+	@Scheduled(delay = 2, delayUnit = TimeUnit.SECONDS, every = TEMPERATURE_PING_TIME + "s")
+	void readTemperature() throws Exception {
 		log.debug("readTemperature");
 		synchronized (lock) {
 			if (checkConnections()) {
@@ -105,8 +105,8 @@ public class SensorPublisher {
 		}
 	}
 
-	@Scheduled(initialDelay = 5000, fixedRate = POWER_PING_TIME * 1000)
-	private void readPowerMeter() throws Exception {
+	@Scheduled(delay = 5, delayUnit = TimeUnit.SECONDS, every = POWER_PING_TIME + "s")
+	void readPowerMeter() throws Exception {
 		log.debug("readPowerMeter");
 		synchronized (lock) {
 			if (checkConnections()) {
@@ -124,8 +124,8 @@ public class SensorPublisher {
 		}
 	}
 
-	@Scheduled(cron = "0 0 0 * * *")
-	private void readDailyConsumtion() throws Exception {
+	@Scheduled(cron = "0 0 0 * * ?")
+	void readDailyConsumtion() throws Exception {
 		log.debug("readDailyConsumtion");
 		synchronized (lock) {
 			if (checkConnections()) {
